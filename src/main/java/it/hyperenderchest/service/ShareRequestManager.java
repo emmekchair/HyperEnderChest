@@ -1,4 +1,4 @@
-package it.hyperenderchest;
+package it.hyperenderchest.service;
 
 import java.time.Clock;
 import java.time.Duration;

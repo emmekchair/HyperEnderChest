@@ -1,4 +1,6 @@
-package it.hyperenderchest;
+package it.hyperenderchest.inventory;
+
+import it.hyperenderchest.model.PairKey;
 
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;

@@ -1,7 +1,8 @@
-package it.hyperenderchest;
+package it.hyperenderchest.model;
 
 import java.util.UUID;
 
+/** Stable, order-independent identifier for a two-player shared inventory. */
 public record PairKey(UUID first, UUID second) {
     public PairKey {
         if (first.equals(second)) {
@@ -14,6 +15,7 @@ public record PairKey(UUID first, UUID second) {
         }
     }
 
+    /** Parses the value written to relation files and block persistent data. */
     public static PairKey parse(String value) {
         String[] parts = value.split("_", 2);
         if (parts.length != 2) {

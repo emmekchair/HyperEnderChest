@@ -1,6 +1,13 @@
-package it.hyperenderchest;
+package it.hyperenderchest.listener;
+
+import it.hyperenderchest.SharedEnderChestPlugin;
+import it.hyperenderchest.config.PluginSettings;
+import it.hyperenderchest.inventory.SharedInventoryHolder;
+import it.hyperenderchest.model.PairKey;
+import it.hyperenderchest.service.EnderChestManager;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -19,6 +26,10 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
+/**
+ * Bridges physical Ender Chest blocks to virtual inventories for Paper's hopper search.
+ * Block PDC stores only a stable owner or pair reference, never an inventory copy.
+ */
 public final class EnderChestListener implements Listener {
     private static final String PERSONAL_PREFIX = "personal:";
     private static final String SHARED_PREFIX = "shared:";
@@ -27,10 +38,12 @@ public final class EnderChestListener implements Listener {
     private final EnderChestManager manager;
     private final NamespacedKey bindingKey;
     private final NamespacedKey axeKey;
+    private final Supplier<PluginSettings> settings;
 
-    public EnderChestListener(SharedEnderChestPlugin plugin, EnderChestManager manager) {
+    public EnderChestListener(SharedEnderChestPlugin plugin, EnderChestManager manager, Supplier<PluginSettings> settings) {
         this.plugin = plugin;
         this.manager = manager;
+        this.settings = settings;
         this.bindingKey = new NamespacedKey(plugin, "hopper-binding");
         this.axeKey = new NamespacedKey(plugin, "hopper-axe");
     }
@@ -73,6 +86,10 @@ public final class EnderChestListener implements Listener {
         player.getWorld().playSound(event.getClickedBlock().getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
     }
 
+    /**
+     * Supplies Paper's hopper with the selected virtual inventory for both source
+     * and destination searches, preserving native transfer semantics.
+     */
     @EventHandler
     public void onHopperSearch(HopperInventorySearchEvent event) {
         if (event.getSearchBlock().getType() != Material.ENDER_CHEST) {
@@ -108,6 +125,7 @@ public final class EnderChestListener implements Listener {
         manager.save(event.getInventory());
     }
 
+    /** Saves on the next tick because Paper applies the hopper move after this event. */
     @EventHandler(ignoreCancelled = true)
     public void onMove(InventoryMoveItemEvent event) {
         Inventory source = event.getSource();
@@ -117,7 +135,7 @@ public final class EnderChestListener implements Listener {
                 : null;
         if (sharedInventory != null) {
             plugin.getServer().getScheduler().runTask(plugin, () -> manager.save(sharedInventory));
-            if (plugin.getConfig().getBoolean("logging.hopper-transfers", false)) {
+            if (settings.get().logHopperTransfers()) {
                 String direction = sharedInventory == source ? "Extraction" : "Insertion";
                 plugin.getLogger().info(direction + " by hopper for shared Ender Chest: " + event.getItem().getType());
             }
@@ -146,6 +164,6 @@ public final class EnderChestListener implements Listener {
     }
 
     private boolean canBind(Player player) {
-        return !plugin.getConfig().getBoolean("require-hopper-permission", true) || player.hasPermission("hyperenderchest.hopper");
+        return !settings.get().requireHopperPermission() || player.hasPermission("hyperenderchest.hopper");
     }
 }

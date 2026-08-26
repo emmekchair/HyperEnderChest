@@ -1,4 +1,8 @@
-package it.hyperenderchest;
+package it.hyperenderchest.service;
+
+import it.hyperenderchest.inventory.SharedInventoryHolder;
+import it.hyperenderchest.model.PairKey;
+import it.hyperenderchest.storage.InventoryStorage;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +16,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * Owns active share relationships and the single live inventory for each pair.
+ * Keeping one Bukkit inventory per pair prevents divergent copies and item duplication.
+ */
 public final class EnderChestManager {
     public enum ViewMode { PERSONAL, SHARED }
 
@@ -82,6 +90,7 @@ public final class EnderChestManager {
         return Optional.of(key);
     }
 
+    /** Returns the canonical inventory for a pair and loads persisted contents once. */
     public Inventory sharedInventory(PairKey key) {
         SharedInventoryHolder holder = loaded.computeIfAbsent(key, ignored -> {
             SharedInventoryHolder created = new SharedInventoryHolder(key, inventorySize);
@@ -107,6 +116,7 @@ public final class EnderChestManager {
         }
     }
 
+    /** Flushes all loaded shared inventories during plugin shutdown. */
     public void saveAll() {
         loaded.keySet().forEach(this::save);
         saveRelations();

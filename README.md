@@ -44,6 +44,7 @@ All commands use `/enderchest`. The shorter `/hec` alias is also available.
 | `/enderchest view shared` | Selects the shared Ender Chest. |
 | `/enderchest unshare` | Revokes the current share without deleting archived shared items. |
 | `/enderchest hopperaxe` | Gives a one-use wooden axe for toggling hopper access on one Ender Chest block. |
+| `/enderchest reload` | Reloads and validates `config.yml`. |
 
 ## Creating a Shared Ender Chest
 
@@ -144,6 +145,7 @@ Ender Chest blocks linked to the revoked share stop working with hoppers.
 | `hyperenderchest.use` | Uses commands and opens plugin inventories. | Everyone |
 | `hyperenderchest.share` | Creates, accepts, denies, and revokes shares. | Operators |
 | `hyperenderchest.hopper` | Gets the configuration axe and toggles hopper access. | Operators |
+| `hyperenderchest.reload` | Reloads plugin configuration. | Operators |
 
 Permissions can be managed with any Paper-compatible permissions plugin.
 
@@ -181,6 +183,22 @@ Plugin data is stored in `plugins/HyperEnderChest/`:
 - Hopper block links are stored in the Ender Chest block's persistent data.
 
 Shared inventory files are replaced atomically when supported by the filesystem. Do not edit data files while the server is running.
+
+## Project Structure
+
+```text
+src/main/java/it/hyperenderchest/
+├── SharedEnderChestPlugin.java   Paper runtime entry point
+├── command/                      Player commands and tab completion
+├── config/                       Validated reloadable settings
+├── inventory/                    Custom inventory holders
+├── listener/                     Block, inventory, and hopper events
+├── model/                        Stable domain identifiers
+├── service/                      Sharing and inventory state
+└── storage/                      Persistent YAML storage
+```
+
+The plugin uses the standard `JavaPlugin#onEnable` and `onDisable` runtime hooks. Paper bootstrappers run earlier, but they are experimental and intended for registry, data pack, constructor, or classpath setup. HyperEnderChest does not need those early facilities.
 
 ## Building from Source
 

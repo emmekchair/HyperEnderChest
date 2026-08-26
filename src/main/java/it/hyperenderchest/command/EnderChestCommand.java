@@ -1,4 +1,11 @@
-package it.hyperenderchest;
+package it.hyperenderchest.command;
+
+import it.hyperenderchest.SharedEnderChestPlugin;
+import it.hyperenderchest.config.PluginSettings;
+import it.hyperenderchest.listener.EnderChestListener;
+import it.hyperenderchest.model.PairKey;
+import it.hyperenderchest.service.EnderChestManager;
+import it.hyperenderchest.service.ShareRequestManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -6,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -20,12 +28,22 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
     private final EnderChestManager manager;
     private final ShareRequestManager requests;
     private final EnderChestListener listener;
+    private final Supplier<PluginSettings> settings;
+    private final Runnable reloadSettings;
 
-    public EnderChestCommand(SharedEnderChestPlugin plugin, EnderChestManager manager, ShareRequestManager requests, EnderChestListener listener) {
+    public EnderChestCommand(
+            SharedEnderChestPlugin plugin,
+            EnderChestManager manager,
+            ShareRequestManager requests,
+            EnderChestListener listener,
+            Supplier<PluginSettings> settings,
+            Runnable reloadSettings) {
         this.plugin = plugin;
         this.manager = manager;
         this.requests = requests;
         this.listener = listener;
+        this.settings = settings;
+        this.reloadSettings = reloadSettings;
     }
 
     @Override
@@ -43,6 +61,7 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
             case "view" -> view(player, args);
             case "unshare" -> unshare(player);
             case "hopperaxe" -> hopperAxe(player);
+            case "reload" -> reload(player);
             default -> false;
         };
     }
@@ -105,7 +124,7 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
         manager.share(sender.getUniqueId(), player.getUniqueId());
         player.sendMessage("Ender Chest shared with " + sender.getName() + ".");
         sender.sendMessage("Ender Chest shared with " + player.getName() + ".");
-        if (plugin.getConfig().getBoolean("logging.share-events", true)) {
+        if (settings.get().logShareEvents()) {
             plugin.getLogger().info("Share created: " + sender.getUniqueId() + " and " + player.getUniqueId());
         }
         return true;
@@ -142,7 +161,7 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
                 online.sendMessage("Ender Chest sharing revoked. Items remain archived.");
             }
         }
-        if (plugin.getConfig().getBoolean("logging.share-events", true)) {
+        if (settings.get().logShareEvents()) {
             plugin.getLogger().info("Share revoked: " + removed.get());
         }
         return true;
@@ -162,14 +181,29 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean reload(Player player) {
+        if (!player.hasPermission("hyperenderchest.reload")) {
+            player.sendMessage("You do not have permission to reload the plugin.");
+            return true;
+        }
+        try {
+            reloadSettings.run();
+            player.sendMessage("HyperEnderChest configuration reloaded.");
+        } catch (IllegalArgumentException exception) {
+            player.sendMessage("Configuration reload failed. Check the server log.");
+            plugin.getLogger().warning(exception.getMessage());
+        }
+        return true;
+    }
+
     private boolean canShare(Player player) {
-        return !plugin.getConfig().getBoolean("require-share-permission", true) || player.hasPermission("hyperenderchest.share");
+        return !settings.get().requireSharePermission() || player.hasPermission("hyperenderchest.share");
     }
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String @NotNull [] args) {
         if (args.length == 1) {
-            return prefix(List.of("open", "share", "accept", "deny", "view", "unshare", "hopperaxe"), args[0]);
+            return prefix(List.of("open", "share", "accept", "deny", "view", "unshare", "hopperaxe", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("view")) {
             return prefix(List.of("personal", "shared"), args[1]);

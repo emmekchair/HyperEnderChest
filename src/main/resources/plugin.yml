@@ -7,7 +7,7 @@ api-version: '26.2'
 commands:
   enderchest:
     description: Manages personal and shared Ender Chests
-    usage: /enderchest <open|share|accept|deny|view|unshare|hopperaxe>
+    usage: /enderchest <open|share|accept|deny|view|unshare|hopperaxe|reload>
     aliases: [hec]
     permission: hyperenderchest.use
 permissions:
@@ -19,4 +19,7 @@ permissions:
     default: op
   hyperenderchest.hopper:
     description: Gets the axe and configures physical Ender Chests for hoppers
+    default: op
+  hyperenderchest.reload:
+    description: Reloads HyperEnderChest configuration
     default: op

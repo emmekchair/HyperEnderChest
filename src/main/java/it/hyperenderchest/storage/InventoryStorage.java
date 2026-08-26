@@ -1,4 +1,6 @@
-package it.hyperenderchest;
+package it.hyperenderchest.storage;
+
+import it.hyperenderchest.model.PairKey;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,6 +13,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
+/** Stores shared inventories using Bukkit YAML serialization and atomic file replacement. */
 public final class InventoryStorage {
     private final File directory;
 
@@ -35,6 +38,10 @@ public final class InventoryStorage {
         }
     }
 
+    /**
+     * Writes a complete snapshot before replacing the previous file, preventing
+     * partially written vaults when the filesystem supports atomic moves.
+     */
     public void save(PairKey key, Inventory inventory) throws IOException {
         YamlConfiguration yaml = new YamlConfiguration();
         List<ItemStack> items = new ArrayList<>(inventory.getSize());
