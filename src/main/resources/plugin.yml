@@ -1,13 +1,13 @@
 name: HyperEnderChest
 version: '${version}'
 main: it.hyperenderchest.SharedEnderChestPlugin
-description: Personal and shared Ender Chests with hopper support
+description: Personal, shared, and banner-linked Ender Chests with hopper support
 author: HyperEnderChest
 api-version: '26.2'
 commands:
   enderchest:
     description: Manages personal and shared Ender Chests
-    usage: /enderchest <open|share|accept|deny|view|unshare|hopperaxe|reload>
+    usage: /enderchest <open|share|accept|deny|view|unshare|hopperaxe|vault|reload>
     aliases: [hec]
     permission: hyperenderchest.use
 permissions:

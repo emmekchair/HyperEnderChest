@@ -1,6 +1,6 @@
 # HyperEnderChest
 
-HyperEnderChest is a Paper plugin that keeps normal personal Ender Chests and lets two players share an additional Ender Chest.
+HyperEnderChest is a Paper plugin providing normal personal Ender Chests, banner-linked personal vault networks, and an additional Ender Chest shared by two players.
 
 It also allows hoppers to insert and extract items from selected Ender Chest blocks. Hopper access must be enabled on each block with a special one-use wooden axe.
 
@@ -12,6 +12,8 @@ It also allows hoppers to insert and extract items from selected Ender Chest blo
 ## Features
 
 - Normal personal Ender Chests
+- Sixteen isolated banner-linked personal vaults per player
+- 54-slot personal vault and shared inventory GUIs
 - One shared Ender Chest between two consenting players
 - Real-time shared inventory for both players
 - Persistent shared items and player settings
@@ -27,7 +29,7 @@ It also allows hoppers to insert and extract items from selected Ender Chest blo
 1. Download or build `HyperEnderChest-1.0.0.jar`.
 2. Place the JAR in the server's `plugins` directory.
 3. Start the Paper server.
-4. Edit `plugins/HyperEnderChest/config.yml` if needed.
+4. Edit `plugins/HyperEnderChest/config.yaml` if needed.
 5. Restart the server after changing the configuration.
 
 ## Commands
@@ -44,7 +46,9 @@ All commands use `/enderchest`. The shorter `/hec` alias is also available.
 | `/enderchest view shared` | Selects the shared Ender Chest. |
 | `/enderchest unshare` | Revokes the current share without deleting archived shared items. |
 | `/enderchest hopperaxe` | Gives a one-use wooden axe for toggling hopper access on one Ender Chest block. |
-| `/enderchest reload` | Reloads and validates `config.yml`. |
+| `/enderchest vault <color>` | Opens your personal vault for one banner color. |
+| `/enderchest vault list` | Lists your existing personal color vaults. |
+| `/enderchest reload` | Reloads and validates `config.yaml`. |
 
 ## Creating a Shared Ender Chest
 
@@ -88,6 +92,24 @@ Select the shared Ender Chest:
 The selected view persists across logins and server restarts.
 
 When the personal view is selected, physical Ender Chest blocks retain normal vanilla behavior. When the shared view is selected, opening a physical Ender Chest opens the shared inventory.
+
+## Banner-Linked Personal Vaults
+
+Each player has a separate 54-slot vault for every banner color. Matching colors link to the same vault only for the same player.
+
+Build one marker in either supported position:
+
+```text
+side layout               top layout
+
+[wall banner]             [standing banner]
+[support block]           [Ender Chest]
+[Ender Chest]
+```
+
+For direct wall layout, attach one wall banner directly to any of the four horizontal sides of the Ender Chest. The previous elevated wall layout also works: place a support block directly above the chest and attach the banner to any side of it. A standing banner may instead be directly above the chest. Exactly one nearby banner is required; multiple banners are ignored as ambiguous. First activation or color change notifies online server operators with owner, vault color, world, and coordinates.
+
+Use `/enderchest vault <color>` to access the same canonical inventory without a physical chest. Banner-linked vault hoppers continue working while the owner is offline because their contents are plugin-managed.
 
 ## Enabling Hopper Access
 
@@ -151,10 +173,10 @@ Permissions can be managed with any Paper-compatible permissions plugin.
 
 ## Configuration
 
-Default `config.yml`:
+Default `config.yaml`:
 
 ```yaml
-inventory-size: 27
+inventory-size: 54
 request-expiry-seconds: 60
 request-cooldown-seconds: 30
 require-share-permission: true
@@ -172,17 +194,20 @@ logging:
 | `require-share-permission` | Requires `hyperenderchest.share` when enabled. |
 | `require-hopper-permission` | Requires `hyperenderchest.hopper` when enabled. |
 | `logging.share-events` | Logs share creation and revocation. |
-| `logging.hopper-transfers` | Logs shared Ender Chest hopper transfers. |
+| `logging.hopper-transfers` | Logs shared and banner-linked Ender Chest hopper transfers. |
 
 ## Data Storage
 
-Plugin data is stored in `plugins/HyperEnderChest/cache.yml`:
+Plugin data is stored in `plugins/HyperEnderChest/data/`, with one `<player-uuid>.yaml` file per player:
 
-- `Players` stores active shares and selected views.
-- `Vaults` stores shared Ender Chest contents.
-- Hopper block links remain in each Ender Chest block's persistent data.
+- `Pair` and `View` store active sharing state.
+- `SharedVaults` stores shared inventories in the first UUID player's file.
+- `PersonalVaults` stores banner-linked inventories by color.
+- Every inventory is raw Paper NBT encoded as Base64, preserving slots, quantities, item metadata, data components, attributes, enchantments, colors, and PDC data.
+- Files are replaced atomically to reduce corruption risk.
+- Hopper block links and banner vault ownership remain in each Ender Chest block's persistent data.
 
-The plugin creates missing cache sections and validates YAML when loading. Do not edit `cache.yml` while the server is running.
+Existing `cache.yml` data remains readable and migrates into `data/*.yaml` when each relation or vault is next saved. Keep `cache.yml` until migration is complete.
 
 ## Project Structure
 

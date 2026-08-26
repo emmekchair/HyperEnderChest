@@ -1,14 +1,18 @@
 package it.hyperenderchest.service;
 
+import it.hyperenderchest.inventory.PersonalInventoryHolder;
 import it.hyperenderchest.inventory.SharedInventoryHolder;
 import it.hyperenderchest.model.PairKey;
+import it.hyperenderchest.model.PersonalVaultKey;
 import it.hyperenderchest.storage.CacheStorage;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
+import org.bukkit.DyeColor;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -26,6 +30,7 @@ public final class EnderChestManager {
     private final Map<UUID, PairKey> pairByPlayer = new HashMap<>();
     private final Map<UUID, ViewMode> viewByPlayer = new HashMap<>();
     private final Map<PairKey, SharedInventoryHolder> loaded = new HashMap<>();
+    private final Map<PersonalVaultKey, PersonalInventoryHolder> personalVaults = new HashMap<>();
 
     public EnderChestManager(JavaPlugin plugin, int inventorySize) {
         this.plugin = plugin;
@@ -107,8 +112,33 @@ public final class EnderChestManager {
         return player.getEnderChest();
     }
 
+    /** Returns the canonical inventory for one owner and banner color. */
+    public Inventory personalVault(PersonalVaultKey key) {
+        PersonalInventoryHolder holder = personalVaults.computeIfAbsent(key, ignored -> {
+            PersonalInventoryHolder created = new PersonalInventoryHolder(key, inventorySize);
+            storage.loadPersonalVault(key, created.getInventory());
+            return created;
+        });
+        return holder.getInventory();
+    }
+
+    public Set<DyeColor> personalVaultColors(UUID owner) {
+        Set<DyeColor> colors = new java.util.HashSet<>();
+        storage.personalVaultColors(owner).forEach(value -> {
+            try {
+                colors.add(DyeColor.valueOf(value));
+            } catch (IllegalArgumentException exception) {
+                plugin.getLogger().warning("Invalid personal vault color ignored for " + owner + ": " + value);
+            }
+        });
+        personalVaults.keySet().stream().filter(key -> key.owner().equals(owner)).map(PersonalVaultKey::color).forEach(colors::add);
+        return Set.copyOf(colors);
+    }
+
     public void save(Inventory inventory) {
         if (inventory.getHolder(false) instanceof SharedInventoryHolder holder) {
+            save(holder.key());
+        } else if (inventory.getHolder(false) instanceof PersonalInventoryHolder holder) {
             save(holder.key());
         }
     }
@@ -116,6 +146,7 @@ public final class EnderChestManager {
     /** Flushes all loaded shared inventories during plugin shutdown. */
     public void saveAll() {
         loaded.keySet().forEach(this::save);
+        personalVaults.keySet().forEach(this::save);
         saveRelations();
     }
 
@@ -128,6 +159,18 @@ public final class EnderChestManager {
             storage.saveVault(key, holder.getInventory());
         } catch (IllegalStateException exception) {
             plugin.getLogger().log(Level.SEVERE, "Failed to save vault: " + key, exception);
+        }
+    }
+
+    private void save(PersonalVaultKey key) {
+        PersonalInventoryHolder holder = personalVaults.get(key);
+        if (holder == null) {
+            return;
+        }
+        try {
+            storage.savePersonalVault(key, holder.getInventory());
+        } catch (IllegalStateException exception) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to save personal vault: " + key, exception);
         }
     }
 

@@ -6,11 +6,13 @@ import it.hyperenderchest.listener.EnderChestListener;
 import it.hyperenderchest.service.EnderChestManager;
 import it.hyperenderchest.service.ShareRequestManager;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class SharedEnderChestPlugin extends JavaPlugin {
     private EnderChestManager manager;
     private PluginSettings settings;
+    private final YamlConfiguration configuration = new YamlConfiguration();
 
     /**
      * Initializes runtime state after Paper has loaded worlds and plugin configuration.
@@ -19,7 +21,7 @@ public final class SharedEnderChestPlugin extends JavaPlugin {
      */
     @Override
     public void onEnable() {
-        saveDefaultConfig();
+        saveYamlResource("config.yaml");
         loadSettings();
         manager = new EnderChestManager(this, settings.inventorySize());
         ShareRequestManager requests = new ShareRequestManager(settings.requestExpiry(), settings.requestCooldown());
@@ -39,12 +41,23 @@ public final class SharedEnderChestPlugin extends JavaPlugin {
     }
 
     public void reloadSettings() {
-        reloadConfig();
         loadSettings();
     }
 
     private void loadSettings() {
-        settings = PluginSettings.from(getConfig());
+        try {
+            configuration.load(new java.io.File(getDataFolder(), "config.yaml"));
+            settings = PluginSettings.from(configuration);
+        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException exception) {
+            throw new IllegalArgumentException("Unable to load config.yaml", exception);
+        }
+    }
+
+    private void saveYamlResource(String name) {
+        java.io.File file = new java.io.File(getDataFolder(), name);
+        if (!file.exists()) {
+            saveResource(name, false);
+        }
     }
 
     /** Persists every loaded shared inventory before Paper unloads the plugin. */

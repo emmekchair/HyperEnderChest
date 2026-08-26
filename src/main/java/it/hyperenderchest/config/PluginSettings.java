@@ -14,7 +14,7 @@ public record PluginSettings(
         boolean logHopperTransfers) {
 
     public static PluginSettings from(FileConfiguration config) {
-        int inventorySize = config.getInt("inventory-size", 27);
+        int inventorySize = config.getInt("inventory-size", 54);
         if (inventorySize < 9 || inventorySize > 54 || inventorySize % 9 != 0) {
             throw new IllegalArgumentException("inventory-size must be a multiple of 9 between 9 and 54");
         }

@@ -2,13 +2,17 @@ package it.hyperenderchest.listener;
 
 import it.hyperenderchest.SharedEnderChestPlugin;
 import it.hyperenderchest.config.PluginSettings;
+import it.hyperenderchest.inventory.PersonalInventoryHolder;
 import it.hyperenderchest.inventory.SharedInventoryHolder;
 import it.hyperenderchest.model.PairKey;
+import it.hyperenderchest.model.PersonalVaultKey;
+import it.hyperenderchest.service.BannerResolver;
 import it.hyperenderchest.service.EnderChestManager;
 
 import java.util.UUID;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
+import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -32,12 +36,16 @@ import org.bukkit.persistence.PersistentDataType;
  */
 public final class EnderChestListener implements Listener {
     private static final String PERSONAL_PREFIX = "personal:";
+    private static final String PERSONAL_VAULT_PREFIX = "personal-vault:";
     private static final String SHARED_PREFIX = "shared:";
 
     private final SharedEnderChestPlugin plugin;
     private final EnderChestManager manager;
     private final NamespacedKey bindingKey;
+    private final NamespacedKey ownerKey;
+    private final NamespacedKey colorKey;
     private final NamespacedKey axeKey;
+    private final BannerResolver bannerResolver = new BannerResolver();
     private final Supplier<PluginSettings> settings;
 
     public EnderChestListener(SharedEnderChestPlugin plugin, EnderChestManager manager, Supplier<PluginSettings> settings) {
@@ -45,6 +53,8 @@ public final class EnderChestListener implements Listener {
         this.manager = manager;
         this.settings = settings;
         this.bindingKey = new NamespacedKey(plugin, "hopper-binding");
+        this.ownerKey = new NamespacedKey(plugin, "personal-vault-owner");
+        this.colorKey = new NamespacedKey(plugin, "personal-vault-color");
         this.axeKey = new NamespacedKey(plugin, "hopper-axe");
     }
 
@@ -55,27 +65,61 @@ public final class EnderChestListener implements Listener {
         }
         Player player = event.getPlayer();
         EnderChestManager.ViewMode view = manager.view(player.getUniqueId());
+        EnderChest chest = (EnderChest) event.getClickedBlock().getState();
         if (isHopperAxe(player.getInventory().getItemInMainHand())) {
             event.setCancelled(true);
             if (!canBind(player)) {
                 player.sendMessage("You do not have permission to configure hoppers.");
                 return;
             }
-            if (event.getClickedBlock().getState() instanceof EnderChest chest) {
-                String current = chest.getPersistentDataContainer().get(bindingKey, PersistentDataType.STRING);
-                if (current == null) {
-                    String binding = view == EnderChestManager.ViewMode.SHARED
+            String current = chest.getPersistentDataContainer().get(bindingKey, PersistentDataType.STRING);
+            if (current == null) {
+                var bannerColor = bannerResolver.resolve(event.getClickedBlock());
+                String binding;
+                if (bannerColor.isPresent()) {
+                    String owner = chest.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+                    if (owner != null && !owner.equals(player.getUniqueId().toString())) {
+                        player.sendMessage("This banner-linked Ender Chest belongs to another player.");
+                        return;
+                    }
+                    PersonalVaultKey key = new PersonalVaultKey(player.getUniqueId(), bannerColor.get());
+                    chest.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, key.owner().toString());
+                    chest.getPersistentDataContainer().set(colorKey, PersistentDataType.STRING, key.color().name());
+                    binding = PERSONAL_VAULT_PREFIX + key;
+                } else {
+                    binding = view == EnderChestManager.ViewMode.SHARED
                             ? manager.pair(player.getUniqueId()).map(key -> SHARED_PREFIX + key).orElse(PERSONAL_PREFIX + player.getUniqueId())
                             : PERSONAL_PREFIX + player.getUniqueId();
-                    chest.getPersistentDataContainer().set(bindingKey, PersistentDataType.STRING, binding);
-                    player.sendMessage("Hoppers enabled for this Ender Chest.");
-                } else {
-                    chest.getPersistentDataContainer().remove(bindingKey);
-                    player.sendMessage("Hoppers disabled for this Ender Chest.");
                 }
-                chest.update(true, false);
-                consumeAxe(player);
+                chest.getPersistentDataContainer().set(bindingKey, PersistentDataType.STRING, binding);
+                player.sendMessage("Hoppers enabled for this Ender Chest.");
+            } else {
+                chest.getPersistentDataContainer().remove(bindingKey);
+                player.sendMessage("Hoppers disabled for this Ender Chest.");
             }
+            chest.update(true, false);
+            consumeAxe(player);
+            return;
+        }
+        var bannerColor = bannerResolver.resolve(event.getClickedBlock());
+        if (bannerColor.isPresent()) {
+            event.setCancelled(true);
+            String owner = chest.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+            if (owner != null && !owner.equals(player.getUniqueId().toString())) {
+                player.sendMessage("This banner-linked Ender Chest belongs to another player.");
+                return;
+            }
+            PersonalVaultKey key = new PersonalVaultKey(player.getUniqueId(), bannerColor.get());
+            String previousOwner = chest.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+            String previousColor = chest.getPersistentDataContainer().get(colorKey, PersistentDataType.STRING);
+            chest.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, key.owner().toString());
+            chest.getPersistentDataContainer().set(colorKey, PersistentDataType.STRING, key.color().name());
+            chest.update(true, false);
+            if (!key.owner().toString().equals(previousOwner) || !key.color().name().equals(previousColor)) {
+                notifyOperators(event.getClickedBlock(), player, key.color());
+            }
+            player.openInventory(manager.personalVault(key));
+            player.getWorld().playSound(event.getClickedBlock().getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
             return;
         }
         if (view != EnderChestManager.ViewMode.SHARED || manager.pair(player.getUniqueId()).isEmpty()) {
@@ -96,6 +140,16 @@ public final class EnderChestListener implements Listener {
             return;
         }
         if (!(event.getSearchBlock().getState() instanceof EnderChest chest)) {
+            return;
+        }
+        String owner = chest.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+        String color = chest.getPersistentDataContainer().get(colorKey, PersistentDataType.STRING);
+        if (owner != null && color != null) {
+            try {
+                event.setInventory(manager.personalVault(new PersonalVaultKey(UUID.fromString(owner), DyeColor.valueOf(color))));
+            } catch (IllegalArgumentException exception) {
+                plugin.getLogger().warning("Invalid personal vault binding at " + event.getSearchBlock().getLocation());
+            }
             return;
         }
         String binding = chest.getPersistentDataContainer().get(bindingKey, PersistentDataType.STRING);
@@ -130,14 +184,16 @@ public final class EnderChestListener implements Listener {
     public void onMove(InventoryMoveItemEvent event) {
         Inventory source = event.getSource();
         Inventory destination = event.getDestination();
-        Inventory sharedInventory = source.getHolder(false) instanceof SharedInventoryHolder ? source
-                : destination.getHolder(false) instanceof SharedInventoryHolder ? destination
+        Inventory pluginInventory = source.getHolder(false) instanceof SharedInventoryHolder
+                        || source.getHolder(false) instanceof PersonalInventoryHolder ? source
+                : destination.getHolder(false) instanceof SharedInventoryHolder
+                        || destination.getHolder(false) instanceof PersonalInventoryHolder ? destination
                 : null;
-        if (sharedInventory != null) {
-            plugin.getServer().getScheduler().runTask(plugin, () -> manager.save(sharedInventory));
+        if (pluginInventory != null) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> manager.save(pluginInventory));
             if (settings.get().logHopperTransfers()) {
-                String direction = sharedInventory == source ? "Extraction" : "Insertion";
-                plugin.getLogger().info(direction + " by hopper for shared Ender Chest: " + event.getItem().getType());
+                String direction = pluginInventory == source ? "Extraction" : "Insertion";
+                plugin.getLogger().info(direction + " by hopper for plugin Ender Chest: " + event.getItem().getType());
             }
         }
     }
@@ -161,6 +217,12 @@ public final class EnderChestListener implements Listener {
         } else {
             axe.setAmount(axe.getAmount() - 1);
         }
+    }
+
+    private void notifyOperators(org.bukkit.block.Block chest, Player owner, DyeColor color) {
+        String message = "[HyperEnderChest] Activated " + color.name() + " vault for " + owner.getName()
+                + " at " + chest.getWorld().getName() + " " + chest.getX() + ", " + chest.getY() + ", " + chest.getZ() + ".";
+        plugin.getServer().getOnlinePlayers().stream().filter(Player::isOp).forEach(operator -> operator.sendMessage(message));
     }
 
     private boolean canBind(Player player) {

@@ -4,6 +4,7 @@ import it.hyperenderchest.SharedEnderChestPlugin;
 import it.hyperenderchest.config.PluginSettings;
 import it.hyperenderchest.listener.EnderChestListener;
 import it.hyperenderchest.model.PairKey;
+import it.hyperenderchest.model.PersonalVaultKey;
 import it.hyperenderchest.service.EnderChestManager;
 import it.hyperenderchest.service.ShareRequestManager;
 
@@ -15,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
+import org.bukkit.DyeColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -61,6 +63,7 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
             case "view" -> view(player, args);
             case "unshare" -> unshare(player);
             case "hopperaxe" -> hopperAxe(player);
+            case "vault" -> vault(player, args);
             case "reload" -> reload(player);
             default -> false;
         };
@@ -181,6 +184,26 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean vault(Player player, String[] args) {
+        if (args.length != 2) {
+            player.sendMessage("Usage: /enderchest vault <color|list>");
+            return true;
+        }
+        if (args[1].equalsIgnoreCase("list")) {
+            List<String> colors = manager.personalVaultColors(player.getUniqueId()).stream()
+                    .map(color -> color.name().toLowerCase(Locale.ROOT)).sorted().toList();
+            player.sendMessage(colors.isEmpty() ? "You have no banner-linked personal vaults." : "Personal vaults: " + String.join(", ", colors));
+            return true;
+        }
+        try {
+            DyeColor color = DyeColor.valueOf(args[1].toUpperCase(Locale.ROOT));
+            player.openInventory(manager.personalVault(new PersonalVaultKey(player.getUniqueId(), color)));
+        } catch (IllegalArgumentException exception) {
+            player.sendMessage("Invalid color. Use /enderchest vault list to see existing vaults.");
+        }
+        return true;
+    }
+
     private boolean reload(Player player) {
         if (!player.hasPermission("hyperenderchest.reload")) {
             player.sendMessage("You do not have permission to reload the plugin.");
@@ -203,10 +226,16 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String @NotNull [] args) {
         if (args.length == 1) {
-            return prefix(List.of("open", "share", "accept", "deny", "view", "unshare", "hopperaxe", "reload"), args[0]);
+            return prefix(List.of("open", "share", "accept", "deny", "view", "unshare", "hopperaxe", "vault", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("view")) {
             return prefix(List.of("personal", "shared"), args[1]);
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("vault")) {
+            List<String> colors = new ArrayList<>();
+            colors.add("list");
+            Arrays.stream(DyeColor.values()).map(color -> color.name().toLowerCase(Locale.ROOT)).forEach(colors::add);
+            return prefix(colors, args[1]);
         }
         if (args.length == 2 && Arrays.asList("share", "accept", "deny").contains(args[0].toLowerCase(Locale.ROOT))) {
             List<String> names = new ArrayList<>();

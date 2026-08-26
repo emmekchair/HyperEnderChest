@@ -1,4 +1,4 @@
-inventory-size: 27
+inventory-size: 54
 request-expiry-seconds: 60
 request-cooldown-seconds: 30
 require-share-permission: true
