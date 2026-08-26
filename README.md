@@ -176,13 +176,13 @@ logging:
 
 ## Data Storage
 
-Plugin data is stored in `plugins/HyperEnderChest/`:
+Plugin data is stored in `plugins/HyperEnderChest/cache.yml`:
 
-- `relations.yml` stores active player shares and selected views.
-- `vaults/` stores shared Ender Chest contents.
-- Hopper block links are stored in the Ender Chest block's persistent data.
+- `Players` stores active shares and selected views.
+- `Vaults` stores shared Ender Chest contents.
+- Hopper block links remain in each Ender Chest block's persistent data.
 
-Shared inventory files are replaced atomically when supported by the filesystem. Do not edit data files while the server is running.
+The plugin creates missing cache sections and validates YAML when loading. Do not edit `cache.yml` while the server is running.
 
 ## Project Structure
 
