@@ -46,9 +46,11 @@ All commands use `/enderchest`. The shorter `/hec` alias is also available.
 | `/enderchest view shared` | Selects the shared Ender Chest. |
 | `/enderchest unshare` | Revokes the current share without deleting archived shared items. |
 | `/enderchest hopperaxe` | Gives a one-use wooden axe for toggling hopper access on one Ender Chest block. |
+| `/enderchest vault` | Opens the personal vault color selector. |
 | `/enderchest vault <color>` | Opens your personal vault for one banner color. |
 | `/enderchest vault list` | Lists your existing personal color vaults. |
-| `/enderchest reload` | Reloads and validates `config.yaml`. |
+| `/enderchest status [player]` | Shows current view, share, and vault count; player argument requires operator permission. |
+| `/enderchest reload` | Reloads `config.yaml`; inventory size changes require restart. |
 
 ## Creating a Shared Ender Chest
 
@@ -140,7 +142,7 @@ Hopper access is disabled on an Ender Chest block until it is configured.
 
 Use another configuration axe on the same block to disable hopper access.
 
-Once enabled, connected hoppers can both insert and extract items.
+Once enabled, connected hoppers can both insert and extract items. Banner-linked vaults also require explicit activation with the configuration axe; opening a banner vault alone does not enable hopper access.
 
 ### Personal Ender Chest Limitation
 
@@ -188,9 +190,9 @@ logging:
 
 | Setting | Description |
 |---|---|
-| `inventory-size` | Shared inventory size. Must be a multiple of 9 between 9 and 54. |
-| `request-expiry-seconds` | Time before a share request expires. |
-| `request-cooldown-seconds` | Delay before a player can send another request. |
+| `inventory-size` | Shared and personal vault size. Must be a multiple of 9 between 9 and 54; changes require restart. |
+| `request-expiry-seconds` | Time before a share request expires; reload applies to new requests. |
+| `request-cooldown-seconds` | Delay before a player can send another request; reload applies immediately. |
 | `require-share-permission` | Requires `hyperenderchest.share` when enabled. |
 | `require-hopper-permission` | Requires `hyperenderchest.hopper` when enabled. |
 | `logging.share-events` | Logs share creation and revocation. |

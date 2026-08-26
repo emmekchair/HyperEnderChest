@@ -11,8 +11,8 @@ import java.util.UUID;
 public final class ShareRequestManager {
     private final Map<UUID, Request> requestsByTarget = new HashMap<>();
     private final Map<UUID, Instant> lastRequestBySender = new HashMap<>();
-    private final Duration expiry;
-    private final Duration cooldown;
+    private Duration expiry;
+    private Duration cooldown;
     private final Clock clock;
 
     public ShareRequestManager(Duration expiry, Duration cooldown) {
@@ -23,6 +23,11 @@ public final class ShareRequestManager {
         this.expiry = expiry;
         this.cooldown = cooldown;
         this.clock = clock;
+    }
+
+    public void reconfigure(Duration expiry, Duration cooldown) {
+        this.expiry = expiry;
+        this.cooldown = cooldown;
     }
 
     public Duration cooldownRemaining(UUID sender) {

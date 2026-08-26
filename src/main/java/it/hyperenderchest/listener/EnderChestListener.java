@@ -9,6 +9,8 @@ import it.hyperenderchest.model.PersonalVaultKey;
 import it.hyperenderchest.service.BannerResolver;
 import it.hyperenderchest.service.EnderChestManager;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -23,10 +25,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.HopperInventorySearchEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -47,6 +51,8 @@ public final class EnderChestListener implements Listener {
     private final NamespacedKey axeKey;
     private final BannerResolver bannerResolver = new BannerResolver();
     private final Supplier<PluginSettings> settings;
+    private final Set<Inventory> pendingSaves = new HashSet<>();
+    private boolean saveScheduled;
 
     public EnderChestListener(SharedEnderChestPlugin plugin, EnderChestManager manager, Supplier<PluginSettings> settings) {
         this.plugin = plugin;
@@ -142,18 +148,21 @@ public final class EnderChestListener implements Listener {
         if (!(event.getSearchBlock().getState() instanceof EnderChest chest)) {
             return;
         }
+        String binding = chest.getPersistentDataContainer().get(bindingKey, PersistentDataType.STRING);
+        if (binding == null) {
+            return;
+        }
         String owner = chest.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
         String color = chest.getPersistentDataContainer().get(colorKey, PersistentDataType.STRING);
-        if (owner != null && color != null) {
+        if (binding.startsWith(PERSONAL_VAULT_PREFIX) && owner != null && color != null) {
             try {
-                event.setInventory(manager.personalVault(new PersonalVaultKey(UUID.fromString(owner), DyeColor.valueOf(color))));
+                PersonalVaultKey key = new PersonalVaultKey(UUID.fromString(owner), DyeColor.valueOf(color));
+                if (binding.equals(PERSONAL_VAULT_PREFIX + key)) {
+                    event.setInventory(manager.personalVault(key));
+                }
             } catch (IllegalArgumentException exception) {
                 plugin.getLogger().warning("Invalid personal vault binding at " + event.getSearchBlock().getLocation());
             }
-            return;
-        }
-        String binding = chest.getPersistentDataContainer().get(bindingKey, PersistentDataType.STRING);
-        if (binding == null) {
             return;
         }
         try {
@@ -175,6 +184,21 @@ public final class EnderChestListener implements Listener {
     }
 
     @EventHandler
+    public void onVaultMenuClick(InventoryClickEvent event) {
+        if (!(event.getInventory().getHolder(false) instanceof VaultMenuHolder holder)) {
+            return;
+        }
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || event.getCurrentItem() == null) {
+            return;
+        }
+        DyeColor color = holder.color(event.getRawSlot());
+        if (color != null) {
+            player.openInventory(manager.personalVault(new PersonalVaultKey(player.getUniqueId(), color)));
+        }
+    }
+
+    @EventHandler
     public void onClose(InventoryCloseEvent event) {
         manager.save(event.getInventory());
     }
@@ -190,12 +214,26 @@ public final class EnderChestListener implements Listener {
                         || destination.getHolder(false) instanceof PersonalInventoryHolder ? destination
                 : null;
         if (pluginInventory != null) {
-            plugin.getServer().getScheduler().runTask(plugin, () -> manager.save(pluginInventory));
+            scheduleSave(pluginInventory);
             if (settings.get().logHopperTransfers()) {
                 String direction = pluginInventory == source ? "Extraction" : "Insertion";
                 plugin.getLogger().info(direction + " by hopper for plugin Ender Chest: " + event.getItem().getType());
             }
         }
+    }
+
+    private void scheduleSave(Inventory inventory) {
+        pendingSaves.add(inventory);
+        if (saveScheduled) {
+            return;
+        }
+        saveScheduled = true;
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Set<Inventory> saves = Set.copyOf(pendingSaves);
+            pendingSaves.clear();
+            saveScheduled = false;
+            saves.forEach(manager::save);
+        });
     }
 
     public ItemStack createHopperAxe() {
@@ -223,6 +261,29 @@ public final class EnderChestListener implements Listener {
         String message = "[HyperEnderChest] Activated " + color.name() + " vault for " + owner.getName()
                 + " at " + chest.getWorld().getName() + " " + chest.getX() + ", " + chest.getY() + ", " + chest.getZ() + ".";
         plugin.getServer().getOnlinePlayers().stream().filter(Player::isOp).forEach(operator -> operator.sendMessage(message));
+    }
+
+    public static final class VaultMenuHolder implements InventoryHolder {
+        private final Inventory inventory = org.bukkit.Bukkit.createInventory(this, 18, Component.text("Personal Vaults"));
+        private final DyeColor[] colors = DyeColor.values();
+
+        public VaultMenuHolder() {
+            for (int slot = 0; slot < colors.length; slot++) {
+                ItemStack item = ItemStack.of(Material.valueOf(colors[slot].name() + "_BANNER"));
+                DyeColor color = colors[slot];
+                item.editMeta(meta -> meta.displayName(Component.text(color.name().toLowerCase(java.util.Locale.ROOT))));
+                inventory.setItem(slot, item);
+            }
+        }
+
+        public DyeColor color(int slot) {
+            return slot >= 0 && slot < colors.length ? colors[slot] : null;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return inventory;
+        }
     }
 
     private boolean canBind(Player player) {

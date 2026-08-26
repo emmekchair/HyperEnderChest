@@ -50,11 +50,17 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String @NotNull [] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command is available to players only.");
-            return true;
-        }
         String action = args.length == 0 ? "open" : args[0].toLowerCase(Locale.ROOT);
+        if (!(sender instanceof Player player)) {
+            return switch (action) {
+                case "reload" -> reload(sender);
+                case "status" -> status(sender, args);
+                default -> {
+                    sender.sendMessage("Console commands: /enderchest <reload|status <player>>");
+                    yield true;
+                }
+            };
+        }
         return switch (action) {
             case "open" -> open(player);
             case "share" -> share(player, args);
@@ -64,6 +70,7 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
             case "unshare" -> unshare(player);
             case "hopperaxe" -> hopperAxe(player);
             case "vault" -> vault(player, args);
+            case "status" -> status(player, args);
             case "reload" -> reload(player);
             default -> false;
         };
@@ -185,8 +192,12 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean vault(Player player, String[] args) {
+        if (args.length == 1) {
+            player.openInventory(new EnderChestListener.VaultMenuHolder().getInventory());
+            return true;
+        }
         if (args.length != 2) {
-            player.sendMessage("Usage: /enderchest vault <color|list>");
+            player.sendMessage("Usage: /enderchest vault [color|list]");
             return true;
         }
         if (args[1].equalsIgnoreCase("list")) {
@@ -204,16 +215,41 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean reload(Player player) {
-        if (!player.hasPermission("hyperenderchest.reload")) {
-            player.sendMessage("You do not have permission to reload the plugin.");
+    private boolean status(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("hyperenderchest.reload")) {
+            sender.sendMessage("You do not have permission to inspect player status.");
+            return true;
+        }
+        Player target;
+        if (args.length == 1 && sender instanceof Player player) {
+            target = player;
+        } else if (args.length == 2) {
+            target = Bukkit.getPlayerExact(args[1]);
+        } else {
+            sender.sendMessage("Usage: /enderchest status [player]");
+            return true;
+        }
+        if (target == null) {
+            sender.sendMessage("Player is offline or unknown.");
+            return true;
+        }
+        Optional<PairKey> pair = manager.pair(target.getUniqueId());
+        sender.sendMessage("Status for " + target.getName() + ": view=" + manager.view(target.getUniqueId()).name().toLowerCase(Locale.ROOT)
+                + ", share=" + pair.map(PairKey::toString).orElse("none")
+                + ", vaults=" + manager.personalVaultColors(target.getUniqueId()).size());
+        return true;
+    }
+
+    private boolean reload(CommandSender sender) {
+        if (!sender.hasPermission("hyperenderchest.reload")) {
+            sender.sendMessage("You do not have permission to reload the plugin.");
             return true;
         }
         try {
             reloadSettings.run();
-            player.sendMessage("HyperEnderChest configuration reloaded.");
+            sender.sendMessage("HyperEnderChest configuration reloaded. inventory-size changes require restart.");
         } catch (IllegalArgumentException exception) {
-            player.sendMessage("Configuration reload failed. Check the server log.");
+            sender.sendMessage("Configuration reload failed. Check the server log.");
             plugin.getLogger().warning(exception.getMessage());
         }
         return true;
@@ -226,7 +262,7 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String @NotNull [] args) {
         if (args.length == 1) {
-            return prefix(List.of("open", "share", "accept", "deny", "view", "unshare", "hopperaxe", "vault", "reload"), args[0]);
+            return prefix(List.of("open", "share", "accept", "deny", "view", "unshare", "hopperaxe", "vault", "status", "reload"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("view")) {
             return prefix(List.of("personal", "shared"), args[1]);
@@ -236,6 +272,11 @@ public final class EnderChestCommand implements CommandExecutor, TabCompleter {
             colors.add("list");
             Arrays.stream(DyeColor.values()).map(color -> color.name().toLowerCase(Locale.ROOT)).forEach(colors::add);
             return prefix(colors, args[1]);
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("status")) {
+            List<String> names = new ArrayList<>();
+            Bukkit.getOnlinePlayers().forEach(player -> names.add(player.getName()));
+            return prefix(names, args[1]);
         }
         if (args.length == 2 && Arrays.asList("share", "accept", "deny").contains(args[0].toLowerCase(Locale.ROOT))) {
             List<String> names = new ArrayList<>();

@@ -26,6 +26,19 @@ class ShareRequestManagerTest {
     }
 
     @Test
+    void appliesReloadedCooldownToExistingSenders() {
+        UUID sender = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        ShareRequestManager manager = new ShareRequestManager(
+                Duration.ofSeconds(60), Duration.ofSeconds(30), Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
+        manager.create(sender, target);
+
+        manager.reconfigure(Duration.ofSeconds(120), Duration.ofSeconds(5));
+
+        assertEquals(Duration.ofSeconds(5), manager.cooldownRemaining(sender));
+    }
+
+    @Test
     void expiresOldRequest() {
         UUID sender = UUID.randomUUID();
         UUID target = UUID.randomUUID();

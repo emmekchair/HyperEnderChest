@@ -11,6 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class SharedEnderChestPlugin extends JavaPlugin {
     private EnderChestManager manager;
+    private ShareRequestManager requests;
     private PluginSettings settings;
     private final YamlConfiguration configuration = new YamlConfiguration();
 
@@ -24,7 +25,7 @@ public final class SharedEnderChestPlugin extends JavaPlugin {
         saveYamlResource("config.yaml");
         loadSettings();
         manager = new EnderChestManager(this, settings.inventorySize());
-        ShareRequestManager requests = new ShareRequestManager(settings.requestExpiry(), settings.requestCooldown());
+        requests = new ShareRequestManager(settings.requestExpiry(), settings.requestCooldown());
         EnderChestListener listener = new EnderChestListener(this, manager, this::settings);
         EnderChestCommand executor = new EnderChestCommand(this, manager, requests, listener, this::settings, this::reloadSettings);
         PluginCommand command = getCommand("enderchest");
@@ -41,7 +42,12 @@ public final class SharedEnderChestPlugin extends JavaPlugin {
     }
 
     public void reloadSettings() {
+        PluginSettings previous = settings;
         loadSettings();
+        requests.reconfigure(settings.requestExpiry(), settings.requestCooldown());
+        if (previous.inventorySize() != settings.inventorySize()) {
+            getLogger().warning("inventory-size changed; restart required for loaded inventories.");
+        }
     }
 
     private void loadSettings() {
