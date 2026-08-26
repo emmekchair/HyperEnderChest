@@ -1,0 +1,8 @@
+.slim/deepwork/
+docs/
+.tools/
+.gradle/
+build/
+.idea/
+*.iml
+*.log

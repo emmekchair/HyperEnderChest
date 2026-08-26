@@ -1,0 +1,8 @@
+inventory-size: 27
+request-expiry-seconds: 60
+request-cooldown-seconds: 30
+require-share-permission: true
+require-hopper-permission: true
+logging:
+  share-events: true
+  hopper-transfers: false
